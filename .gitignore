@@ -1,0 +1,32 @@
+# Data (download with onprem/download_data.py)
+data/
+
+# Local secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Spark / Delta local artifacts
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Airflow local state
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/standalone_admin_password.txt
+
+# Personal files that are not part of the project
+siddhi_data_engineer_resume.*
+
+# Editors
+.vscode/
+.idea/
+.ipynb_checkpoints/

@@ -1,0 +1,11 @@
+# Matches Databricks Runtime 15.4 LTS (Spark 3.5, Delta Lake 3.2)
+pyspark==3.5.3
+delta-spark==3.2.1
+
+# On-prem loader and local extract
+pandas==2.2.3
+pyarrow==17.0.0
+psycopg[binary]==3.2.3
+
+# Tests
+pytest==8.3.3

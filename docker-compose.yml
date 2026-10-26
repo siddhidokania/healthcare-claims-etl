@@ -1,0 +1,66 @@
+services:
+  # Simulated on-prem source system
+  onprem-db:
+    image: postgres:16-alpine
+    container_name: claims_onprem_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-claims}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-claims_onprem}
+    ports:
+      # 5433 on the host so it does not clash with a local PostgreSQL on 5432.
+      # Azure Data Factory's self-hosted integration runtime connects here.
+      - "5433:5432"
+    volumes:
+      - onprem_pgdata:/var/lib/postgresql/data
+      - ./onprem/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-claims} -d ${POSTGRES_DB:-claims_onprem}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Python + Spark + Delta runner for the loader, local pipeline and tests
+  runner:
+    build:
+      context: .
+      dockerfile: docker/runner/Dockerfile
+    image: claims-etl-runner:latest
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-claims}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-claims_onprem}
+      POSTGRES_HOST: onprem-db
+      POSTGRES_PORT: "5432"
+      LAKE_ROOT: /lake
+    volumes:
+      - .:/app
+      # The lake lives in a Docker volume, not the project folder, so file
+      # sync tools (OneDrive etc.) do not touch thousands of Delta files.
+      - lake_data:/lake
+    depends_on:
+      onprem-db:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  # Airflow (standalone) for orchestrating ADF + Databricks
+  airflow:
+    image: apache/airflow:2.10.5-python3.11
+    container_name: claims_airflow
+    command: standalone
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        apache-airflow-providers-microsoft-azure==12.2.0
+        apache-airflow-providers-databricks==7.2.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    profiles: ["airflow"]
+
+volumes:
+  onprem_pgdata:
+  lake_data:
