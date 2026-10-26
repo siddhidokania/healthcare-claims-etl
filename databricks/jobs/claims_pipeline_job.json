@@ -1,0 +1,82 @@
+{
+    "name": "claims-pipeline",
+    "description": "Bronze -> silver -> gold -> data quality + reconciliation -> optimize for one batch of claims.",
+    "max_concurrent_runs": 1,
+    "parameters": [
+        { "name": "batch_id", "default": "" },
+        { "name": "lake_root", "default": "abfss://lake@<your-storage-account>.dfs.core.windows.net" },
+        { "name": "auth", "default": "unity_catalog" }
+    ],
+    "git_source": {
+        "git_url": "https://github.com/siddhidokania/healthcare-claims-etl",
+        "git_provider": "gitHub",
+        "git_branch": "main"
+    },
+    "job_clusters": [
+        {
+            "job_cluster_key": "single_node",
+            "new_cluster": {
+                "spark_version": "15.4.x-scala2.12",
+                "node_type_id": "Standard_D4ds_v5",
+                "num_workers": 0,
+                "data_security_mode": "SINGLE_USER",
+                "spark_conf": {
+                    "spark.databricks.cluster.profile": "singleNode",
+                    "spark.master": "local[*]"
+                },
+                "custom_tags": { "ResourceClass": "SingleNode" }
+            }
+        }
+    ],
+    "tasks": [
+        {
+            "task_key": "bronze",
+            "job_cluster_key": "single_node",
+            "notebook_task": {
+                "notebook_path": "databricks/notebooks/01_bronze",
+                "source": "GIT",
+                "base_parameters": { "run_id": "{{job.run_id}}" }
+            }
+        },
+        {
+            "task_key": "silver",
+            "depends_on": [ { "task_key": "bronze" } ],
+            "job_cluster_key": "single_node",
+            "notebook_task": {
+                "notebook_path": "databricks/notebooks/02_silver",
+                "source": "GIT",
+                "base_parameters": { "run_id": "{{job.run_id}}" }
+            }
+        },
+        {
+            "task_key": "gold",
+            "depends_on": [ { "task_key": "silver" } ],
+            "job_cluster_key": "single_node",
+            "notebook_task": {
+                "notebook_path": "databricks/notebooks/03_gold",
+                "source": "GIT",
+                "base_parameters": { "run_id": "{{job.run_id}}" }
+            }
+        },
+        {
+            "task_key": "quality_reconcile",
+            "depends_on": [ { "task_key": "gold" } ],
+            "job_cluster_key": "single_node",
+            "notebook_task": {
+                "notebook_path": "databricks/notebooks/04_quality_reconcile",
+                "source": "GIT",
+                "base_parameters": { "run_id": "{{job.run_id}}" }
+            }
+        },
+        {
+            "task_key": "optimize",
+            "depends_on": [ { "task_key": "quality_reconcile" } ],
+            "job_cluster_key": "single_node",
+            "notebook_task": {
+                "notebook_path": "databricks/notebooks/05_optimize",
+                "source": "GIT",
+                "base_parameters": { "run_id": "{{job.run_id}}" }
+            }
+        }
+    ]
+}
