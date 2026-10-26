@@ -1,5 +1,7 @@
 # Healthcare Claims ETL Modernization: On-Prem PostgreSQL to Azure Databricks
 
+[![CI](https://github.com/siddhidokania/healthcare-claims-etl/actions/workflows/ci.yml/badge.svg)](https://github.com/siddhidokania/healthcare-claims-etl/actions/workflows/ci.yml)
+
 An end-to-end data engineering project that migrates a legacy on-prem claims ETL job to a cloud data platform on Azure. Azure Data Factory copies data incrementally from an on-prem PostgreSQL database into ADLS Gen2, Azure Databricks builds **bronze, silver and gold Delta Lake layers** with PySpark and Spark SQL, and Apache Airflow orchestrates the whole pipeline.
 
 The data is the CMS **DE-SynPUF** synthetic Medicare dataset: 116,352 patients and 857,563 inpatient and outpatient claim rows from 2008 to 2010, loaded as three yearly batches.
@@ -36,7 +38,7 @@ flowchart LR
 | Reconciliation | 17 checks per batch, all passing; **$863,795,510.00** of payments matched to the cent from source → bronze → silver → gold and against the legacy report |
 | Incremental loads | Each batch extracts only rows changed since the last watermark, including 531 simulated late adjustments per year |
 | Performance tuning | Broadcast joins cut the fact table build from **17.9 s to 6.8 s (62% faster)**; fact table partitioned by year and Z-ordered |
-| Tests | 19 unit tests (PySpark + Delta) |
+| Tests | 19 unit tests (PySpark + Delta), run by GitHub Actions CI on every push and pull request |
 
 ## What the pipeline does
 

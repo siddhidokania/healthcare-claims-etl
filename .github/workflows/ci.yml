@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile all Python (pipeline, notebooks, DAG)
+        run: python -m compileall -q src ingestion onprem pipeline warehouse_snowflake analytics airflow databricks tests
+
+      - name: Validate ADF and Databricks job JSON
+        run: |
+          for f in $(find adf databricks/jobs -name '*.json'); do
+            python -c "import json, sys; json.load(open(sys.argv[1]))" "$f" && echo "ok $f"
+          done
+
+  tests:
+    name: Unit tests (PySpark + Delta)
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same versions as the local runner image and Databricks Runtime 15.4 LTS
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache Delta Lake jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.ivy2
+          key: ivy-delta-3.2.1
+
+      - name: Run tests
+        run: python -m pytest tests -v -p no:cacheprovider
