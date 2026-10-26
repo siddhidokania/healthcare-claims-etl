@@ -33,6 +33,8 @@ services:
       POSTGRES_HOST: onprem-db
       POSTGRES_PORT: "5432"
       LAKE_ROOT: /lake
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT:-}
+      SNOWFLAKE_PRIVATE_KEY_FILE: /app/warehouse_snowflake/keys/claims_svc_rsa_key.p8
     volumes:
       - .:/app
       # The lake lives in a Docker volume, not the project folder, so file

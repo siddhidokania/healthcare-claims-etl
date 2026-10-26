@@ -74,12 +74,15 @@ Facts look up the patient version that was valid **on the claim date**, and unkn
 **7. Orchestration** ([airflow/dags/claims_pipeline_dag.py](airflow/dags/claims_pipeline_dag.py), [databricks/jobs/claims_pipeline_job.json](databricks/jobs/claims_pipeline_job.json))
 An Airflow DAG runs the ADF pipeline and then a multi-task Databricks job (bronze → silver → gold → quality + reconcile → optimize) on a single-node job cluster.
 
-**8. Analytics** ([analytics/](analytics))
+**8. Snowflake serving layer** ([warehouse_snowflake/](warehouse_snowflake), [docs/snowflake.md](docs/snowflake.md))
+The gold star schema is loaded into Snowflake through an internal stage and `COPY INTO`, then reconciled to the cent. Clustering on the claim date cut the partitions a one-month query reads from 32 to 2 and halved storage on a 17M-row table. A benchmark across XSMALL, SMALL and MEDIUM warehouses using query profiles showed XSMALL as the right size. A resource monitor (alerts at 50% and 80%, suspend at 90%), 60-second auto-suspend and a FinOps report keep cost under control. The pipeline signs in as a key-pair service user.
+
+**9. Analytics** ([analytics/](analytics))
 The gold layer is exported for BI tools. [claims_analysis.xlsx](analytics/claims_analysis.xlsx) is an Excel workbook with KPIs, trends and a chronic-condition cost analysis, all as live formulas. There is also a Power BI build guide with DAX measures and a Tableau guide.
 
 ## Tech stack
 
-Python, SQL, PySpark, Spark SQL, Delta Lake, Azure Data Factory, ADLS Gen2, Azure Databricks, Apache Airflow, PostgreSQL, Docker, pytest
+Python, SQL, PySpark, Spark SQL, Delta Lake, Azure Data Factory, ADLS Gen2, Azure Databricks, Snowflake, Apache Airflow, PostgreSQL, Docker, pytest
 
 ## Run it locally
 

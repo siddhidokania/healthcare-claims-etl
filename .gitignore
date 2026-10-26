@@ -3,6 +3,8 @@ data/
 
 # Local secrets
 .env
+warehouse_snowflake/keys/
+warehouse_snowflake/sql/00_account_setup.local.sql
 
 # Python
 __pycache__/
