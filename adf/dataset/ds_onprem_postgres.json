@@ -1,0 +1,12 @@
+{
+    "name": "ds_onprem_postgres",
+    "properties": {
+        "description": "Generic PostgreSQL dataset; every activity supplies its own query.",
+        "linkedServiceName": {
+            "referenceName": "ls_onprem_postgres",
+            "type": "LinkedServiceReference"
+        },
+        "type": "PostgreSqlV2Table",
+        "typeProperties": {}
+    }
+}

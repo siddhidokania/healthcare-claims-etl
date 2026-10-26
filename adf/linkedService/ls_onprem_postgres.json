@@ -1,0 +1,27 @@
+{
+    "name": "ls_onprem_postgres",
+    "properties": {
+        "type": "PostgreSqlV2",
+        "description": "On-prem claims database, reached through the self-hosted integration runtime.",
+        "connectVia": {
+            "referenceName": "ir-onprem-shir",
+            "type": "IntegrationRuntimeReference"
+        },
+        "typeProperties": {
+            "server": "localhost",
+            "port": 5433,
+            "database": "claims_onprem",
+            "username": "claims",
+            "authenticationType": "Basic",
+            "sslMode": 2,
+            "password": {
+                "type": "AzureKeyVaultSecret",
+                "store": {
+                    "referenceName": "ls_keyvault",
+                    "type": "LinkedServiceReference"
+                },
+                "secretName": "onprem-postgres-password"
+            }
+        }
+    }
+}

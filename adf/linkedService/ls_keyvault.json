@@ -1,0 +1,10 @@
+{
+    "name": "ls_keyvault",
+    "properties": {
+        "type": "AzureKeyVault",
+        "description": "Holds the on-prem PostgreSQL password. ADF's managed identity needs 'Key Vault Secrets User'.",
+        "typeProperties": {
+            "baseUrl": "https://<your-key-vault>.vault.azure.net/"
+        }
+    }
+}

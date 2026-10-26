@@ -1,0 +1,22 @@
+{
+    "name": "ds_lake_json",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_adls",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "folderPath": { "type": "string" },
+            "fileName": { "type": "string" }
+        },
+        "type": "Json",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "fileSystem": "lake",
+                "folderPath": { "value": "@dataset().folderPath", "type": "Expression" },
+                "fileName": { "value": "@dataset().fileName", "type": "Expression" }
+            }
+        }
+    }
+}

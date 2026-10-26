@@ -1,0 +1,10 @@
+{
+    "name": "ls_adls",
+    "properties": {
+        "type": "AzureBlobFS",
+        "description": "ADLS Gen2 data lake. Uses ADF's managed identity, which needs 'Storage Blob Data Contributor' on the storage account.",
+        "typeProperties": {
+            "url": "https://<your-storage-account>.dfs.core.windows.net/"
+        }
+    }
+}

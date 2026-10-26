@@ -1,0 +1,7 @@
+{
+    "name": "ir-onprem-shir",
+    "properties": {
+        "type": "SelfHosted",
+        "description": "Self-hosted integration runtime installed on the machine that runs the on-prem PostgreSQL (Docker, port 5433)."
+    }
+}

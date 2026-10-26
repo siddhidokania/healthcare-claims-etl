@@ -1,0 +1,163 @@
+{
+    "name": "pl_ingest_claims_incremental",
+    "properties": {
+        "description": "Watermark-based incremental copy from the on-prem PostgreSQL claims system to the ADLS raw zone, with a manifest per table for reconciliation. Same logic as ingestion/extract_incremental.py.",
+        "parameters": {
+            "batch_id": { "type": "string" },
+            "tables": {
+                "type": "array",
+                "defaultValue": [
+                    { "schema": "claims_src", "table_name": "beneficiary", "mode": "incremental", "amount_column": "" },
+                    { "schema": "claims_src", "table_name": "inpatient_claims", "mode": "incremental", "amount_column": "clm_pmt_amt" },
+                    { "schema": "claims_src", "table_name": "outpatient_claims", "mode": "incremental", "amount_column": "clm_pmt_amt" },
+                    { "schema": "legacy_rpt", "table_name": "claims_monthly_summary", "mode": "full", "amount_column": "total_payment" }
+                ]
+            }
+        },
+        "variables": {
+            "filter": { "type": "String", "defaultValue": "" }
+        },
+        "activities": [
+            {
+                "name": "ForEachTable",
+                "type": "ForEach",
+                "typeProperties": {
+                    "items": { "value": "@pipeline().parameters.tables", "type": "Expression" },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "GetOldWatermark",
+                            "description": "Watermarks are read as text so no precision is lost (ADF would round timestamps).",
+                            "type": "Lookup",
+                            "policy": { "timeout": "0.00:10:00", "retry": 2, "retryIntervalInSeconds": 60 },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "PostgreSqlV2Source",
+                                    "query": {
+                                        "value": "@concat('SELECT COALESCE((SELECT last_watermark::text FROM etl_control.watermark WHERE table_name = ''', item().table_name, '''), ''1900-01-01 00:00:00+00'') AS last_watermark')",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "dataset": { "referenceName": "ds_onprem_postgres", "type": "DatasetReference" },
+                                "firstRowOnly": true
+                            }
+                        },
+                        {
+                            "name": "GetNewWatermark",
+                            "type": "Lookup",
+                            "dependsOn": [ { "activity": "GetOldWatermark", "dependencyConditions": [ "Succeeded" ] } ],
+                            "policy": { "timeout": "0.00:10:00", "retry": 2, "retryIntervalInSeconds": 60 },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "PostgreSqlV2Source",
+                                    "query": {
+                                        "value": "@if(equals(item().mode, 'incremental'), concat('SELECT COALESCE(MAX(updated_at)::text, ''', activity('GetOldWatermark').output.firstRow.last_watermark, ''') AS new_watermark FROM ', item().schema, '.', item().table_name), 'SELECT now()::text AS new_watermark')",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "dataset": { "referenceName": "ds_onprem_postgres", "type": "DatasetReference" },
+                                "firstRowOnly": true
+                            }
+                        },
+                        {
+                            "name": "SetFilter",
+                            "type": "SetVariable",
+                            "dependsOn": [ { "activity": "GetNewWatermark", "dependencyConditions": [ "Succeeded" ] } ],
+                            "typeProperties": {
+                                "variableName": "filter",
+                                "value": {
+                                    "value": "@if(equals(item().mode, 'incremental'), concat(' WHERE updated_at > ''', activity('GetOldWatermark').output.firstRow.last_watermark, '''::timestamptz AND updated_at <= ''', activity('GetNewWatermark').output.firstRow.new_watermark, '''::timestamptz'), '')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "CopyToRaw",
+                            "type": "Copy",
+                            "dependsOn": [ { "activity": "SetFilter", "dependencyConditions": [ "Succeeded" ] } ],
+                            "policy": { "timeout": "0.02:00:00", "retry": 2, "retryIntervalInSeconds": 120 },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "PostgreSqlV2Source",
+                                    "query": {
+                                        "value": "@concat('SELECT * FROM ', item().schema, '.', item().table_name, variables('filter'))",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "ParquetSink",
+                                    "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+                                    "formatSettings": { "type": "ParquetWriteSettings" }
+                                },
+                                "enableStaging": false
+                            },
+                            "inputs": [ { "referenceName": "ds_onprem_postgres", "type": "DatasetReference" } ],
+                            "outputs": [
+                                {
+                                    "referenceName": "ds_lake_parquet",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "folderPath": { "value": "@concat('raw/', item().table_name, '/batch_id=', pipeline().parameters.batch_id)", "type": "Expression" },
+                                        "fileName": "part-00000.parquet"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "WriteManifest",
+                            "description": "Source row count and amount total for this extract, used by the reconciliation step in Databricks.",
+                            "type": "Copy",
+                            "dependsOn": [ { "activity": "CopyToRaw", "dependencyConditions": [ "Succeeded" ] } ],
+                            "policy": { "timeout": "0.00:30:00", "retry": 2, "retryIntervalInSeconds": 60 },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "PostgreSqlV2Source",
+                                    "query": {
+                                        "value": "@concat('SELECT ''', item().table_name, ''' AS table_name, ''', pipeline().parameters.batch_id, ''' AS batch_id, COUNT(*) AS row_count, ', if(empty(item().amount_column), 'NULL::text', concat('COALESCE(SUM(', item().amount_column, '), 0)::text')), ' AS amount_sum, ', if(equals(item().mode, 'incremental'), concat('''', activity('GetOldWatermark').output.firstRow.last_watermark, ''' AS watermark_from, ''', activity('GetNewWatermark').output.firstRow.new_watermark, ''' AS watermark_to, '), 'NULL::text AS watermark_from, NULL::text AS watermark_to, '), 'now()::text AS extracted_at FROM ', item().schema, '.', item().table_name, variables('filter'))",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "JsonSink",
+                                    "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+                                    "formatSettings": { "type": "JsonWriteSettings", "filePattern": "setOfObjects" }
+                                },
+                                "enableStaging": false
+                            },
+                            "inputs": [ { "referenceName": "ds_onprem_postgres", "type": "DatasetReference" } ],
+                            "outputs": [
+                                {
+                                    "referenceName": "ds_lake_json",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "folderPath": { "value": "@concat('raw/_manifests/batch_id=', pipeline().parameters.batch_id)", "type": "Expression" },
+                                        "fileName": { "value": "@concat(item().table_name, '.json')", "type": "Expression" }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "UpdateWatermark",
+                            "description": "Moves the watermark only after the data and manifest are written. Full-mode tables have no watermark row, so this returns no rows for them.",
+                            "type": "Lookup",
+                            "dependsOn": [ { "activity": "WriteManifest", "dependencyConditions": [ "Succeeded" ] } ],
+                            "policy": { "timeout": "0.00:10:00", "retry": 2, "retryIntervalInSeconds": 60 },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "PostgreSqlV2Source",
+                                    "query": {
+                                        "value": "@concat('SELECT table_name, last_watermark::text AS last_watermark, last_batch_id FROM etl_control.update_watermark(''', item().table_name, ''', ''', activity('GetNewWatermark').output.firstRow.new_watermark, '''::timestamptz, ''', pipeline().parameters.batch_id, ''')')",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "dataset": { "referenceName": "ds_onprem_postgres", "type": "DatasetReference" },
+                                "firstRowOnly": false
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "annotations": [ "claims", "ingestion" ]
+    }
+}
