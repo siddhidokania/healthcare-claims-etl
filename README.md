@@ -74,6 +74,9 @@ Facts look up the patient version that was valid **on the claim date**, and unkn
 **7. Orchestration** ([airflow/dags/claims_pipeline_dag.py](airflow/dags/claims_pipeline_dag.py), [databricks/jobs/claims_pipeline_job.json](databricks/jobs/claims_pipeline_job.json))
 An Airflow DAG runs the ADF pipeline and then a multi-task Databricks job (bronze → silver → gold → quality + reconcile → optimize) on a single-node job cluster.
 
+**8. Analytics** ([analytics/](analytics))
+The gold layer is exported for BI tools. [claims_analysis.xlsx](analytics/claims_analysis.xlsx) is an Excel workbook with KPIs, trends and a chronic-condition cost analysis, all as live formulas. There is also a Power BI build guide with DAX measures and a Tableau guide.
+
 ## Tech stack
 
 Python, SQL, PySpark, Spark SQL, Delta Lake, Azure Data Factory, ADLS Gen2, Azure Databricks, Apache Airflow, PostgreSQL, Docker, pytest

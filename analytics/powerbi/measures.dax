@@ -1,0 +1,37 @@
+// DAX measures for the Claims Analysis report.
+// Create them in Power BI Desktop: select the fact_claims table > New measure, paste one at a time.
+
+Total Payment = SUM ( fact_claims[payment_amt] )
+
+Claims = COUNTROWS ( fact_claims )
+
+Patients = DISTINCTCOUNT ( dim_patient[patient_id] )
+
+Avg Payment per Claim = DIVIDE ( [Total Payment], [Claims] )
+
+Inpatient Payment = CALCULATE ( [Total Payment], fact_claims[claim_type] = "IP" )
+
+Outpatient Payment = CALCULATE ( [Total Payment], fact_claims[claim_type] = "OP" )
+
+Inpatient Share = DIVIDE ( [Inpatient Payment], [Total Payment] )
+
+Payment Prior Year =
+CALCULATE ( [Total Payment], SAMEPERIODLASTYEAR ( dim_date[full_date] ) )
+
+Payment YoY % = DIVIDE ( [Total Payment] - [Payment Prior Year], [Payment Prior Year] )
+
+Payment YTD = TOTALYTD ( [Total Payment], dim_date[full_date] )
+
+Avg Length of Stay =
+CALCULATE ( AVERAGE ( fact_claims[length_of_stay_days] ), fact_claims[claim_type] = "IP" )
+
+Adjustment Claims = CALCULATE ( [Claims], fact_claims[is_adjustment] = TRUE () )
+
+Claims per Patient = DIVIDE ( [Claims], [Patients] )
+
+// Patients whose patient version on the claim has diabetes; the SCD Type 2 join means
+// a claim reflects the patient's conditions in the year of the claim.
+Diabetic Patients =
+CALCULATE ( [Patients], dim_patient[has_diabetes] = TRUE () )
+
+Payment per Patient = DIVIDE ( [Total Payment], [Patients] )
